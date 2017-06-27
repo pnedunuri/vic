@@ -156,7 +156,9 @@ Get Docker Params
     Run Keyword If  ${tls_enabled} == ${true}  Set Environment Variable  COMPOSE-PARAMS  -H ${dockerHost}
 
 Install VIC Appliance To Test Server
-    [Arguments]  ${vic-machine}=bin/vic-machine-linux  ${appliance-iso}=bin/appliance.iso  ${bootstrap-iso}=bin/bootstrap.iso  ${certs}=${true}  ${vol}=default  ${cleanup}=${true}  ${additional-args}=  
+    [Arguments]  ${vic-machine}=bin/vic-machine-linux  ${appliance-iso}=bin/appliance.iso  ${bootstrap-iso}=bin/bootstrap.iso  ${certs}=${true}  ${vol}=default  ${cleanup}=${true}  ${reuseVCH}=${false}  ${additional-args}=
+    ${vchExists}=  Run Keyword And Return Status  Environment Variable Should Be Set  VCH-NAME
+    Pass Execution If  ${vchExists} and ${reuseVCH}  Re-using VCH - %{VCH-NAME}
     Set Test Environment Variables
     # disable firewall
     Run Keyword If  '%{HOST_TYPE}' == 'ESXi'  Run  govc host.esxcli network firewall set -e false
@@ -272,12 +274,20 @@ Scrape Logs For the Password
     Remove File  /tmp/cookies-%{VCH-NAME}
 
 Cleanup VIC Appliance On Test Server
+    [Arguments]  ${keepVCH}=${false}
     Log To Console  Gathering logs from the test server %{VCH-NAME}
     Gather Logs From Test Server
+    Run Keyword If  ${keepVCH}  Cleanup Containers And Images
+    Return From Keyword If  ${keepVCH}  Keeping the existing VCH - %{VCH-NAME}
     Log To Console  Deleting the VCH appliance %{VCH-NAME}
     ${output}=  Run VIC Machine Delete Command
     Run Keyword And Ignore Error  Cleanup VCH Bridge Network  %{VCH-NAME}
+    Remove Environment Variable  VCH-NAME
     [Return]  ${output}
+
+Cleanup Containers And Images
+    ${out}=  Run  docker %{VCH-PARAMS} ps -aq | xargs -n1 docker %{VCH-PARAMS} rm -f
+    ${out}=  Run  docker %{VCH-PARAMS} images -aq | xargs -n1 docker %{VCH-PARAMS} rmi -f
 
 Cleanup VCH Bridge Network
     [Arguments]  ${name}
